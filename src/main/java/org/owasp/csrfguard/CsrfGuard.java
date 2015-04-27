@@ -274,6 +274,9 @@ public final class CsrfGuard {
 		return getTokenValue(request, request.getRequestURI());
 	}
 
+	public boolean isDoubleCookieSubmit() {
+		return config().isDoubleCookieSubmit();
+	}
 	public String getTokenValue(HttpServletRequest request, String uri) {
 		String tokenValue = null;
 		HttpSession session = request.getSession(false);

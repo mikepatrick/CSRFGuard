@@ -34,7 +34,7 @@
 	 * @param fn
 	 * @source http://www.dustindiaz.com/rock-solid-addevent/
 	 */
-	function addEvent( obj, type, fn ) {
+	function addEvent( obj, type, fn )
 	    if (obj.addEventListener) {
 	        obj.addEventListener( type, fn, false );
 	        EventCache.add(obj, type, fn);
@@ -371,6 +371,11 @@
 		xhr.send(null);
 		
 		var text = xhr.responseText;
+		var cookieToken = xhr.getResponseHeader("Set-Cookie");
+		if (cookieToken)
+		{
+			
+		}
 		var name = "";
 		var value = "";
 		var nameContext = true;
@@ -422,6 +427,17 @@
 		xhr.send(null);
 		
 		var token_pair = xhr.responseText;
+		var cookieToken = xhr.getResponseHeader("Set-Cookie");
+		
+		if ("%DOUBLE_SUBMIT_COOKIE%")
+		{
+			console.warn("double submit cookie");
+		}
+		if (cookieToken)
+		{
+			console.warn(cookieToken);
+		}
+		
 		token_pair = token_pair.split(":");
 		var token_name = token_pair[0];
 		var token_value = token_pair[1];

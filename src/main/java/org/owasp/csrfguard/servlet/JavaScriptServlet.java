@@ -38,6 +38,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import javax.servlet.ServletConfig;
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -80,6 +81,8 @@ public final class JavaScriptServlet extends HttpServlet {
 	private static final String X_REQUESTED_WITH_IDENTIFIER = "%X_REQUESTED_WITH%";
 	
 	private static final String TOKENS_PER_PAGE_IDENTIFIER = "%TOKENS_PER_PAGE%";
+	
+	private static final String USE_DOUBLE_COOKIE_SUBMIT = "%DOUBLE_COOKIE_SUBMIT%";
 	
 	private static ServletConfig servletConfig = null;
 
@@ -153,24 +156,47 @@ public final class JavaScriptServlet extends HttpServlet {
 			fetchCsrfToken(request, response);
 		} else {
 			if (csrfGuard != null && csrfGuard.isTokenPerPageEnabled()) {
-				writePageTokens(request, response);
+//  Potential future work to flesh out double cookie submit functionality				
+//				if (csrfGuard.isDoubleCookieSubmit())
+//					setCookieAndRespond(request, response);
+//				else
+					writePageTokens(request, response);
 			} else {
 				response.sendError(404);
 			}
 		}
 	}
 
+//	private void setCookieAndRespond(HttpServletRequest request, HttpServletResponse response) throws IOException
+//	{
+//		CsrfGuard csrfGuard = CsrfGuard.getInstance();
+//		Cookie cookie = new Cookie(csrfGuard.getTokenName(), ((String) request.getSession(true).getAttribute(csrfGuard.getSessionKey())));
+//		cookie.setSecure(false);
+//		response.addCookie(cookie);
+//		PrintWriter pw = new PrintWriter(response.getOutputStream());
+//		pw.write("");
+//		pw.flush();
+//		Streams.close(response.getOutputStream());
+//		Writers.close(pw);
+//	}
+	
 	private void fetchCsrfToken(HttpServletRequest request, HttpServletResponse response) throws IOException {
 		HttpSession session = request.getSession(true);
-		@SuppressWarnings("unchecked")
 		CsrfGuard csrfGuard = CsrfGuard.getInstance();
 		String token_name = csrfGuard.getTokenName();
 		String token_value = (String) session.getAttribute(csrfGuard.getSessionKey());
 		String token_pair = token_name + ":" + token_value;
 
+		
 		/** setup headers **/
 		response.setContentType("text/plain");
 
+		if (csrfGuard.isDoubleCookieSubmit())
+		{
+			Cookie cookie = new Cookie(token_name, token_value);
+			cookie.setSecure(false);
+			response.addCookie(cookie);
+		}
 		/** write dynamic javascript **/
 		OutputStream output = null;
 		PrintWriter writer = null;
@@ -179,7 +205,7 @@ public final class JavaScriptServlet extends HttpServlet {
 			output = response.getOutputStream();
 			writer = new PrintWriter(output);
 
-			writer.write(token_pair);
+			writer.write(csrfGuard.isDoubleCookieSubmit()? "" : token_pair);
 			writer.flush();
 		} finally {
 			Writers.close(writer);
@@ -188,6 +214,7 @@ public final class JavaScriptServlet extends HttpServlet {
 	}
 
 
+	// Unique token per page (double cookie submit not implemented).
 	private void writePageTokens(HttpServletRequest request, HttpServletResponse response) throws IOException {
 		HttpSession session = request.getSession(true);
 		@SuppressWarnings("unchecked")
@@ -245,7 +272,7 @@ public final class JavaScriptServlet extends HttpServlet {
 		code = code.replace(CONTEXT_PATH_IDENTIFIER, CsrfGuardUtils.defaultString(request.getContextPath()));
 		code = code.replace(SERVLET_PATH_IDENTIFIER, CsrfGuardUtils.defaultString(request.getContextPath() + request.getServletPath()));
 		code = code.replace(X_REQUESTED_WITH_IDENTIFIER, CsrfGuardUtils.defaultString(csrfGuard.getJavascriptXrequestedWith()));
-
+		code = code.replace(USE_DOUBLE_COOKIE_SUBMIT, Boolean.toString(csrfGuard.isDoubleCookieSubmit()));
 		/** write dynamic javascript **/
 		OutputStream output = null;
 		PrintWriter writer = null;

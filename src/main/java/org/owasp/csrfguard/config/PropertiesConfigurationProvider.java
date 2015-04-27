@@ -28,7 +28,6 @@
  */
 package org.owasp.csrfguard.config;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -44,7 +43,6 @@ import javax.servlet.ServletConfig;
 
 import org.owasp.csrfguard.CsrfGuardServletContextListener;
 import org.owasp.csrfguard.action.IAction;
-import org.owasp.csrfguard.config.overlay.ConfigurationOverlayProvider;
 import org.owasp.csrfguard.log.ILogger;
 import org.owasp.csrfguard.servlet.JavaScriptServlet;
 import org.owasp.csrfguard.util.CsrfGuardUtils;
@@ -101,6 +99,8 @@ public final class PropertiesConfigurationProvider implements ConfigurationProvi
 	
 	private Properties propertiesCache;
 	
+	private final boolean doubleCookieSubmit;
+	
 	public PropertiesConfigurationProvider(Properties properties) {
 		try {
 			this.propertiesCache = properties;
@@ -135,7 +135,7 @@ public final class PropertiesConfigurationProvider implements ConfigurationProvi
 			sessionKey = propertyString(properties, "org.owasp.csrfguard.SessionKey", "OWASP_CSRFGUARD_KEY");
 			ajax = Boolean.valueOf(propertyString(properties, "org.owasp.csrfguard.Ajax", "false"));
 			protect = Boolean.valueOf(propertyString(properties, "org.owasp.csrfguard.Protect", "false"));
-	
+			doubleCookieSubmit = Boolean.valueOf(propertyString(properties, "org.owasp.csrfguard.doublecookie", "false"));
 			/** first pass: instantiate actions **/
 			Map<String, IAction> actionsMap = new HashMap<String, IAction>();
 	
@@ -565,6 +565,12 @@ public final class PropertiesConfigurationProvider implements ConfigurationProvi
 	public boolean isJavascriptInjectFormAttributes() {
 		this.javascriptInitParamsIfNeeded();
 		return this.javascriptInjectFormAttributes;
+	}
+
+	@Override
+	public boolean isDoubleCookieSubmit() {
+
+		return doubleCookieSubmit;
 	}
 
 }

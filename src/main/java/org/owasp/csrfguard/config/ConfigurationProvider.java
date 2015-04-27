@@ -131,5 +131,7 @@ public interface ConfigurationProvider {
 	String getJavascriptXrequestedWith();
 
 	String getJavascriptTemplateCode();
+	
+	boolean isDoubleCookieSubmit();
 
 }

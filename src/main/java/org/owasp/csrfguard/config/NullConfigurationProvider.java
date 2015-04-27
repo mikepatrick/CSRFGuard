@@ -253,4 +253,9 @@ public final class NullConfigurationProvider implements ConfigurationProvider {
 		return false;
 	}
 
+	@Override
+	public boolean isDoubleCookieSubmit() {
+		return false;
+	}
+
 }

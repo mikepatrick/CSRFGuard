@@ -42,13 +42,13 @@ public class ConfigurationAutodetectProviderFactory implements
 		if (configurationProvider == null) {
 			synchronized (ConfigurationAutodetectProviderFactory.class) {
 				if (configurationProvider == null) {
-					
+					Properties theProperties = new Properties();
 					Class<? extends ConfigurationProviderFactory> factoryClass = null;
 					
 					//if there is an overlay, and that specifies the factory, use that
 					InputStream inputStream = getClass().getClassLoader().getResourceAsStream(ConfigurationOverlayProvider.OWASP_CSRF_GUARD_OVERLAY_PROPERTIES);
 					if (inputStream != null) {
-						Properties theProperties = new Properties();
+						theProperties = new Properties();
 						try {
 							theProperties.load(inputStream);
 						} catch (IOException ioe) {
@@ -70,7 +70,7 @@ public class ConfigurationAutodetectProviderFactory implements
 					}
 					
 					ConfigurationProviderFactory factory = CsrfGuardUtils.newInstance(factoryClass);
-					configurationProvider = factory.retrieveConfiguration(defaultProperties);
+					configurationProvider = factory.retrieveConfiguration(theProperties.size() == 0 ? defaultProperties : theProperties);
 					configurationProviderCache.put(Boolean.TRUE, configurationProvider);
 					
 				}

@@ -28,7 +28,7 @@ public class ConfigurationOverlayProvider extends ConfigPropertiesCascadeBase {
 	/**
 	 * ovrlay properties file
 	 */
-	public static final String OWASP_CSRF_GUARD_OVERLAY_PROPERTIES = "Owasp.CsrfGuard.overlay.properties";
+	public static final String OWASP_CSRF_GUARD_OVERLAY_PROPERTIES = "/com/cds/web/test/config/CsrfGuard.properties";
 
 	/**
 	 * retrieve a config from the config file or from cache

@@ -34,6 +34,7 @@ import java.io.PrintWriter;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
@@ -307,16 +309,27 @@ public final class CsrfGuard {
 		boolean valid = !isProtectedPageAndMethod(request);
 		HttpSession session = request.getSession(true);
 		String tokenFromSession = (String) session.getAttribute(getSessionKey());
-
+		String tokenFromCookie = getCsrfCookie(request);
+		
 		/** sending request to protected resource - verify token **/
-		if (tokenFromSession != null && !valid) {
+		//TODO MSP this OR feel weird... do something smarter here.
+		if ((tokenFromSession != null || (tokenFromCookie != null && CsrfGuard.getInstance().isDoubleCookieSubmit())) && !valid) {
 			try {
 				if (isAjaxEnabled() && isAjaxRequest(request)) {
-					verifyAjaxToken(request);
+					if (this.isDoubleCookieSubmit())
+						verifyAjaxCookie(request);
+					else
+						verifyAjaxToken(request);
 				} else if (isTokenPerPageEnabled()) {
-					verifyPageToken(request);
+					if (this.isDoubleCookieSubmit())
+						verifyPageCookie(request);
+					else
+						verifyPageToken(request);
 				} else {
-					verifySessionToken(request);
+					if (this.isDoubleCookieSubmit())
+						verifySessionCookie(request);
+					else
+						verifySessionToken(request);
 				}
 				valid = true;
 			} catch (CsrfGuardException csrfe) {
@@ -328,6 +341,7 @@ public final class CsrfGuard {
 				rotateTokens(request);
 			}
 			/** expected token in session - bad state and not valid **/
+			//TODO MSP need to check isDoubleCookieSubmit(), and not throw an exception here if so?
 		} else if (tokenFromSession == null && !valid) {
 			try {
 				throw new CsrfGuardException("CsrfGuard expects the token to exist in session at this point");
@@ -538,28 +552,72 @@ public final class CsrfGuard {
 		return request.getHeader("X-Requested-With") != null;
 	}
 
-	private void verifyAjaxToken(HttpServletRequest request) throws CsrfGuardException {
-		HttpSession session = request.getSession(true);
-		String tokenFromSession = (String) session.getAttribute(getSessionKey());
+	private void verifyAjaxCookie(HttpServletRequest request) throws CsrfGuardException
+	{
+		String tokenFromCookie = getCsrfCookie(request);
 		String tokenFromRequest = request.getHeader(getTokenName());
-
-		if (tokenFromRequest == null) {
+		verifyAjax(tokenFromRequest, tokenFromCookie);
+	}
+	
+	public String getCsrfCookie(HttpServletRequest request)
+	{
+		List<Cookie> cookies = Arrays.asList(request.getCookies());
+		for (Cookie cookie: cookies)
+		{
+			if (cookie.getName().equals("cds_x_id"))
+				return cookie.getValue();
+		}
+		
+		return null;
+	}
+	// For synchronizer token, the tokenToVerify is in the request, the verification token is in the session.
+	// For double cookie submit, the verification token is in the cookie.
+	private void verifyAjax(String tokenToVerify, String verificationToken) throws CsrfGuardException
+	{
+		if (tokenToVerify == null) {
 			/** FAIL: token is missing from the request **/
 			throw new CsrfGuardException("required token is missing from the request");
 		} else {
 			//if there are two headers, then the result is comma separated
-			if (!tokenFromSession.equals(tokenFromRequest)) {
-				if (tokenFromRequest.contains(",")) {
-					tokenFromRequest = tokenFromRequest.substring(0, tokenFromRequest.indexOf(',')).trim();
+			if (!verificationToken.equals(tokenToVerify)) {
+				if (tokenToVerify.contains(",")) {
+					tokenToVerify = tokenToVerify.substring(0, tokenToVerify.indexOf(',')).trim();
 				}
-				if (!tokenFromSession.equals(tokenFromRequest)) {
+				if (!verificationToken.equals(tokenToVerify)) {
 					/** FAIL: the request token does not match the session token **/
 					throw new CsrfGuardException("request token does not match session token");
 				}
 			}
 		}
 	}
+	private void verifyAjaxToken(HttpServletRequest request) throws CsrfGuardException {
+		HttpSession session = request.getSession(true);
+		String tokenFromSession = (String) session.getAttribute(getSessionKey());
+		String tokenFromRequest = request.getHeader(getTokenName());
+		verifyAjax(tokenFromRequest, tokenFromSession);
+//		if (tokenFromRequest == null) {
+//			/** FAIL: token is missing from the request **/
+//			throw new CsrfGuardException("required token is missing from the request");
+//		} else {
+//			//if there are two headers, then the result is comma separated
+//			if (!tokenFromSession.equals(tokenFromRequest)) {
+//				if (tokenFromRequest.contains(",")) {
+//					tokenFromRequest = tokenFromRequest.substring(0, tokenFromRequest.indexOf(',')).trim();
+//				}
+//				if (!tokenFromSession.equals(tokenFromRequest)) {
+//					/** FAIL: the request token does not match the session token **/
+//					throw new CsrfGuardException("request token does not match session token");
+//				}
+//			}
+//		}
+	}
 
+	private void verifyPageCookie(HttpServletRequest request) throws CsrfGuardException
+	{
+		//TODO  Double cookie submit pattern
+		verifyPageToken(request);
+	}
+	
 	private void verifyPageToken(HttpServletRequest request) throws CsrfGuardException {
 		HttpSession session = request.getSession(true);
 		@SuppressWarnings("unchecked")
@@ -568,7 +626,26 @@ public final class CsrfGuard {
 		String tokenFromPages = (pageTokens != null ? pageTokens.get(request.getRequestURI()) : null);
 		String tokenFromSession = (String) session.getAttribute(getSessionKey());
 		String tokenFromRequest = request.getParameter(getTokenName());
-
+		String tokenFromCookie = getCsrfCookie(request);
+		if (CsrfGuard.getInstance().isDoubleCookieSubmit())
+		{
+			System.out.println("tokenFromPages: " + tokenFromPages);
+			System.out.println("tokenFromSession: " + tokenFromSession);
+			System.out.println("tokenFromRequest" + tokenFromRequest);
+			System.out.println("tokenFromCookie: " + tokenFromCookie);
+			
+			if (!tokenFromRequest.equals(tokenFromCookie))
+			{
+				throw new CsrfGuardException("Cookie token does not match request token");
+			}
+			if (tokenFromPages != null)
+			{
+				if (!tokenFromRequest.equals(tokenFromPages))
+				{
+					throw new CsrfGuardException("Request token does not match token from pages");
+				}
+			}
+		}
 		if (tokenFromRequest == null) {
 			/** FAIL: token is missing from the request **/
 			throw new CsrfGuardException("required token is missing from the request");
@@ -583,18 +660,36 @@ public final class CsrfGuard {
 		}
 	}
 
+	private void verifySessionCookie(HttpServletRequest request) throws CsrfGuardException
+	{
+		String tokenFromRequest = request.getParameter(getTokenName());
+		String tokenFromCookie = getCsrfCookie(request);
+		verifySession(tokenFromRequest, tokenFromCookie);
+	}
+	
+	private void verifySession(String tokenToVerify, String verificationToken) throws CsrfGuardException
+	{
+		if (tokenToVerify == null) {
+			/** FAIL: token is missing from the request **/
+			throw new CsrfGuardException("required token is missing from the request");
+		} else if (!verificationToken.equals(tokenToVerify)) {
+			/** FAIL: the request token does not match the session token **/
+			throw new CsrfGuardException("request token does not match session token");
+		}
+	}
 	private void verifySessionToken(HttpServletRequest request) throws CsrfGuardException {
 		HttpSession session = request.getSession(true);
 		String tokenFromSession = (String) session.getAttribute(getSessionKey());
 		String tokenFromRequest = request.getParameter(getTokenName());
 
-		if (tokenFromRequest == null) {
-			/** FAIL: token is missing from the request **/
-			throw new CsrfGuardException("required token is missing from the request");
-		} else if (!tokenFromSession.equals(tokenFromRequest)) {
-			/** FAIL: the request token does not match the session token **/
-			throw new CsrfGuardException("request token does not match session token");
-		}
+		verifySession(tokenFromRequest, tokenFromSession);
+//		if (tokenFromRequest == null) {
+//			/** FAIL: token is missing from the request **/
+//			throw new CsrfGuardException("required token is missing from the request");
+//		} else if (!tokenFromSession.equals(tokenFromRequest)) {
+//			/** FAIL: the request token does not match the session token **/
+//			throw new CsrfGuardException("request token does not match session token");
+//		}
 	}
 
 	private void rotateTokens(HttpServletRequest request) {
